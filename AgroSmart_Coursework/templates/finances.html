@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <title>Бухгалтерія - AgroSmart</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial; background: linear-gradient(180deg,#f7fbf8,#eef7ee); }
+        .navbar { background: linear-gradient(90deg,#2e7d32,#4ba05a); }
+    </style>
+</head>
+<body class="bg-light">
+    
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand"> Фінансовий відділ</span>
+            <a href="/dashboard" class="btn btn-outline-light btn-sm"> Назад в кабінет</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        
+        <div class="row mb-4 text-center">
+            <div class="col-md-4">
+                <div class="card shadow-sm border-success mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted">Загальний Дохід</h6>
+                        <h3 class="text-success fw-bold">+{{ income }} грн</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-danger mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted">Загальні Витрати</h6>
+                        <h3 class="text-danger fw-bold">-{{ expense }} грн</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm bg-light mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted">Чистий Прибуток (Сальдо)</h6>
+                        <h3 class="fw-bold {% if balance >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                            {{ balance }} грн
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0"> Журнал операцій</h4>
+            {% if session['role'] in ['admin', 'accountant'] %}
+            <button class="btn btn-success shadow" data-bs-toggle="modal" data-bs-target="#addTransactionModal">
+                + Нова транзакція
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="card p-3 mb-4 shadow-sm border-0">
+            <form action="/finances" method="GET" class="row g-2 align-items-center">
+                
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white">Пошук</span>
+                        <input type="text" name="search" class="form-control" placeholder="Опис операції (напр. паливо)..." value="{{ search_query }}">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"></span>
+                        <input type="date" name="date" class="form-control" value="{{ filter_date }}">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <select name="sort" class="form-select">
+                        <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}> Спочатку нові</option>
+                        <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}> Спочатку старі</option>
+                        <option value="amount_desc" {% if current_sort == 'amount_desc' %}selected{% endif %}> Сума: Від найбільшої</option>
+                        <option value="amount_asc" {% if current_sort == 'amount_asc' %}selected{% endif %}> Сума: Від найменшої</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary w-100">Знайти</button>
+                    {% if search_query or filter_date or current_sort != 'newest' %}
+                        <a href="/finances" class="btn btn-outline-secondary">✕</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card shadow-sm border-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Дата</th>
+                        <th>Опис операції</th>
+                        <th>Категорія</th>
+                        <th class="text-end">Сума</th>
+                        {% if session['role'] == 'admin' %}<th class="text-end">Дії</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in transactions %}
+                    <tr>
+                        <td>{{ item.transaction_date }}</td>
+                        <td class="fw-bold">{{ item.description }}</td>
+                        <td>
+                            {% if item.category == 'income' %}
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success">Прибуток </span>
+                            {% else %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Витрата </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end fw-bold fs-5 {% if item.category == 'income' %}text-success{% else %}text-danger{% endif %}">
+                            {% if item.category == 'income' %}+{% else %}-{% endif %}{{ item.amount }}
+                        </td>
+                        
+                        {% if session['role'] == 'admin' %}
+                        <td class="text-end">
+                            <form action="{{ url_for('delete_transaction', id=item.finance_id) }}" method="POST" onsubmit="return confirm('Видалити цей запис? Це змінить баланс!');">
+                                <button class="btn btn-sm btn-outline-secondary text-danger border-0">✕</button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if not transactions %}
+                <div class="text-center p-5 text-muted">
+                    <h4>! Нічого не знайдено</h4>
+                    <p>Спробуйте змінити параметри пошуку або дату.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="modal fade" id="addTransactionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Провести транзакцію</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/add_transaction" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="fw-bold">Тип операції</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="category" id="cat_income" value="income" checked>
+                                <label class="btn btn-outline-success" for="cat_income"> Прибуток</label>
+
+                                <input type="radio" class="btn-check" name="category" id="cat_expense" value="expense">
+                                <label class="btn btn-outline-danger" for="cat_expense"> Витрата</label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Опис / Призначення</label>
+                            <input type="text" name="description" class="form-control" placeholder="Напр. Продаж сої або Закупка палива" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Сума (грн)</label>
+                            <input type="number" step="0.01" name="amount" class="form-control fw-bold" placeholder="0.00" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Дата</label>
+                            <input type="date" name="date" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success">Зберегти та провести</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.querySelector('input[name="date"]').valueAsDate = new Date();
+    </script>
+</body>
+</html>

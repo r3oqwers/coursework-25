@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <title>Агрономія - AgroSmart</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial;
+            background: linear-gradient(180deg,#f7fbf8,#eef7ee);
+        }
+        .navbar {
+            background: linear-gradient(90deg,#2e7d32,#4ba05a);
+        }
+    </style>
+</head>
+<body class="bg-light">
+    
+    <nav class="navbar navbar-dark bg-success mb-4">
+        <div class="container">
+            <span class="navbar-brand"> Відділ Агрономії</span>
+            <a href="/dashboard" class="btn btn-outline-light btn-sm"> Назад в кабінет</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card p-3 mb-4 shadow-sm border-0">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <h4 class="text-success mb-0"> Активні посіви</h4>
+                </div>
+
+                <div class="col-md-5">
+                    <form action="/crops" method="GET" class="d-flex gap-2">
+                        <input type="text" name="search" class="form-control" placeholder="Назва або Поле..." value="{{ search_query }}">
+                        
+                        <select name="sort" class="form-select w-75">
+                            <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}> Новіші</option>
+                            <option value="name_asc" {% if current_sort == 'name_asc' %}selected{% endif %}> Назва А-Я</option>
+                            <option value="field" {% if current_sort == 'field' %}selected{% endif %}> Поле</option>
+                            <option value="harvest_date" {% if current_sort == 'harvest_date' %}selected{% endif %}> Дата жнив</option>
+                        </select>
+                        
+                        <button type="submit" class="btn btn-outline-success">Пошук</button>
+                        {% if search_query %}
+                            <a href="/crops" class="btn btn-outline-danger">✕</a>
+                        {% endif %}
+                    </form>
+                </div>
+
+                <div class="col-md-4 text-end">
+                    {% if session['role'] in ['admin', 'agronomist'] %}
+                    <button class="btn btn-success shadow-sm" data-bs-toggle="modal" data-bs-target="#addCropModal">
+                        + Посіяти
+                    </button>
+                    <button class="btn btn-warning shadow-sm" data-bs-toggle="modal" data-bs-target="#addHarvestModal">
+                         Зібрати врожай
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 mb-5">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Культура</th>
+                        <th>Поле (Локація)</th>
+                        <th>Дата посіву</th>
+                        <th>Прогноз жнив</th>
+                        <th class="text-end">Дії</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for crop in crops %}
+                    <tr>
+                        <td class="fw-bold text-success">{{ crop.crop_name }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ crop.field_name }}</span>
+                        </td>
+                        <td>{{ crop.planting_date }}</td>
+                        <td>{{ crop.expected_harvest_date }}</td>
+                        <td class="text-end">
+                            {% if session['role'] in ['admin', 'agronomist'] %}
+                                <button class="btn btn-sm btn-outline-primary me-1 edit-btn"
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#editCropModal"
+                                    data-id="{{ crop.crop_id }}"
+                                    data-name="{{ crop.crop_name }}"
+                                    data-field="{{ crop.field_id }}"
+                                    data-pdate="{{ crop.planting_date }}"
+                                    data-hdate="{{ crop.expected_harvest_date }}">
+                                    Ред.
+                                </button>
+                                
+                                <form action="{{ url_for('delete_crop', id=crop.crop_id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Видалити цей посів? Історія врожаю теж буде видалена!');">
+                                    <button class="btn btn-sm btn-outline-danger">Вид.</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if not crops %}
+                <div class="text-center p-4 text-muted">За вашим запитом нічого не знайдено.</div>
+            {% endif %}
+        </div>
+
+        <h4 class="text-warning text-dark mb-3"> Журнал збору врожаю</h4>
+        <div class="card shadow-sm border-0">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Культура</th>
+                        <th>Вага (тон)</th>
+                        <th>Відповідальний</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in harvest_logs %}
+                    <tr>
+                        <td>{{ log.harvest_date }}</td>
+                        <td class="fw-bold">{{ log.crop_name }}</td>
+                        <td class="fs-5 text-primary fw-bold">+ {{ log.amount_tons }} т</td>
+                        <td class="text-muted small">
+                             {{ log.full_name }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal fade" id="addCropModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Реєстрація посівів</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/add_crop" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3"><label>Що сіємо?</label><input type="text" name="crop_name" class="form-control" placeholder="Напр. Озима пшениця" required></div>
+                        <div class="mb-3">
+                            <label>На якому полі?</label>
+                            <select name="field_id" class="form-select" required>
+                                {% for field in fields %}
+                                    <option value="{{ field.field_id }}">{{ field.field_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3"><label>Дата посіву</label><input type="date" name="planting_date" class="form-control" required></div>
+                        <div class="mb-3"><label>Прогноз збору (дата)</label><input type="date" name="harvest_date" class="form-control"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success">Записати</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editCropModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Редагування посіву</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/edit_crop" method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="crop_id" id="edit_id">
+                        
+                        <div class="mb-3"><label>Культура</label><input type="text" name="crop_name" id="edit_name" class="form-control" required></div>
+                        <div class="mb-3">
+                            <label>Поле</label>
+                            <select name="field_id" id="edit_field" class="form-select" required>
+                                {% for field in fields %}
+                                    <option value="{{ field.field_id }}">{{ field.field_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3"><label>Дата посіву</label><input type="date" name="planting_date" id="edit_pdate" class="form-control" required></div>
+                        <div class="mb-3"><label>Прогноз жнив</label><input type="date" name="harvest_date" id="edit_hdate" class="form-control"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">Зберегти зміни</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="addHarvestModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">Фіксація врожаю</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/add_harvest" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label>Яку культуру зібрали?</label>
+                            <select name="crop_id" class="form-select" required>
+                                {% for crop in crops %}
+                                    <option value="{{ crop.crop_id }}">{{ crop.crop_name }} (на полі {{ crop.field_name }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3"><label>Кількість (Тон)</label><input type="number" step="0.01" name="amount" class="form-control fw-bold" placeholder="0.00" required></div>
+                        <div class="mb-3"><label>Дата збору</label><input type="date" name="date" class="form-control" required></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-warning">Зберегти</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.querySelectorAll('input[type="date"]').forEach(el => {
+            if (!el.value) el.valueAsDate = new Date();
+        });
+
+        const editModal = document.getElementById('editCropModal');
+        editModal.addEventListener('show.bs.modal', event => {
+            const button = event.relatedTarget;
+            document.getElementById('edit_id').value = button.getAttribute('data-id');
+            document.getElementById('edit_name').value = button.getAttribute('data-name');
+            document.getElementById('edit_field').value = button.getAttribute('data-field');
+            document.getElementById('edit_pdate').value = button.getAttribute('data-pdate');
+            document.getElementById('edit_hdate').value = button.getAttribute('data-hdate');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "feature": "claude_haiku_4_5",
+  "enabled": true,
+  "scope": "all_clients",
+  "rollout": "100%",
+  "description": "Enable Claude Haiku 4.5 for every client. Ensure your feature flag loader imports files from the features directory."
+}

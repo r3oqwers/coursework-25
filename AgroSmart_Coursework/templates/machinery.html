@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <title>Парк Техніки - AgroSmart</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial; background: linear-gradient(180deg,#f7fbf8,#eef7ee); }
+        .navbar { background: linear-gradient(90deg,#2e7d32,#4ba05a); }
+    </style>
+</head>
+<body class="bg-light">
+    
+    <nav class="navbar navbar-dark bg-secondary mb-4">
+        <div class="container">
+            <span class="navbar-brand"> Парк Техніки</span>
+            <a href="/dashboard" class="btn btn-outline-light btn-sm"> Назад в кабінет</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0"> Технічний стан та Облік</h2>
+            {% if session['role'] in ['admin', 'manager'] %}
+            <button class="btn btn-primary shadow" data-bs-toggle="modal" data-bs-target="#addMachineModal">
+                + Купити техніку
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="card p-3 mb-4 shadow-sm border-0">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-6">
+                    <form action="/machinery" method="GET" class="d-flex">
+                        <input type="text" name="search" class="form-control me-2" placeholder=" Пошук..." value="{{ search_query }}">
+                        <input type="hidden" name="sort" value="{{ current_sort }}">
+                        <button type="submit" class="btn btn-outline-secondary">Знайти</button>
+                        {% if search_query %}
+                            <a href="/machinery" class="btn btn-outline-danger ms-1">✕</a>
+                        {% endif %}
+                    </form>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <span class="text-muted me-2">Сортувати за:</span>
+                    <div class="btn-group">
+                        <a href="/machinery?sort=status&search={{ search_query }}" class="btn btn-outline-dark {% if current_sort == 'status' %}active{% endif %}">Статус</a>
+                        <a href="/machinery?sort=model_name&search={{ search_query }}" class="btn btn-outline-dark {% if current_sort == 'model_name' %}active{% endif %}">Модель</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            {% for machine in machines %}
+            <div class="col-md-6 col-lg-4 mb-4"> <div class="card h-100 shadow-sm border-0">
+                    
+                    <div class="card-header text-white 
+                        {% if machine.status == 'active' %}bg-success
+                        {% elif machine.status == 'busy' %}bg-primary
+                        {% elif machine.status == 'repair' %}bg-warning
+                        {% else %}bg-danger{% endif %}">
+                        
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 fw-bold">{{ machine.model_name }}</h5>
+                            <span style="font-size: 1.2rem;">
+                                {% if machine.status == 'active' %}
+                                {% elif machine.status == 'busy' %}
+                                {% elif machine.status == 'repair' %}
+                                {% else %}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <p class="mb-1 text-muted">Тип: <strong>{{ machine.machine_type }}</strong></p>
+                        
+                        <hr class="my-2">
+                        
+                        {% if machine.status == 'active' %}
+                            <div class="text-success fw-bold mb-3">Готовий до роботи</div>
+                            <button class="btn btn-success w-100 mb-2" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#assignModal"
+                                    data-id="{{ machine.machine_id }}"
+                                    data-model="{{ machine.model_name }}">
+                                 Видати на поле
+                            </button>
+                            <div class="d-flex gap-2">
+                                <form action="{{ url_for('set_repair', id=machine.machine_id) }}" method="POST" class="flex-fill">
+                                    <button class="btn btn-outline-warning w-100 btn-sm">В ремонт</button>
+                                </form>
+                                <form action="{{ url_for('set_broken', id=machine.machine_id) }}" method="POST" class="flex-fill">
+                                    <button class="btn btn-outline-danger w-100 btn-sm">Зламався</button>
+                                </form>
+                            </div>
+
+                        {% elif machine.status == 'busy' %}
+                            <div class="alert alert-primary py-2 small mb-3">
+                                <div> <strong>{{ machine.driver_name }}</strong></div>
+                                <div> Поле: <strong>{{ machine.current_field }}</strong></div>
+                                <div class="text-muted mt-1"> Повернення: {{ machine.expected_end_time }}</div>
+                            </div>
+                            <form action="{{ url_for('return_machine', id=machine.machine_id) }}" method="POST">
+                                <button class="btn btn-outline-primary w-100"> Повернути в гараж</button>
+                            </form>
+
+                        {% else %}
+                            <div class="alert alert-danger py-2 text-center mb-3">
+                                 ТЕХНІКА НЕСПРАВНА
+                            </div>
+                            <form action="{{ url_for('return_machine', id=machine.machine_id) }}" method="POST">
+                                <button class="btn btn-outline-success w-100"> Завершити ремонт</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="card-footer bg-white border-top-0 d-flex justify-content-between">
+                         <button class="btn btn-link text-decoration-none btn-sm text-muted"
+                                data-bs-toggle="modal" 
+                                data-bs-target="#editMachineModal"
+                                data-id="{{ machine.machine_id }}"
+                                data-model="{{ machine.model_name }}"
+                                data-type="{{ machine.machine_type }}"
+                                data-year="{{ machine.purchase_year }}">
+                             Редагувати
+                        </button>
+                        
+                        {% if session['role'] == 'admin' %}
+                        <form action="{{ url_for('delete_machine', id=machine.machine_id) }}" method="POST" onsubmit="return confirm('Списати?');">
+                            <button class="btn btn-link text-decoration-none btn-sm text-danger"> Списати</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="modal fade" id="assignModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"> Видача техніки</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/assign_machine" method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="machine_id" id="assign_id">
+                        <h4 class="text-center text-success mb-3" id="assign_model"></h4>
+                        
+                        <div class="mb-3">
+                            <label class="fw-bold">Хто бере техніку?</label>
+                            <select name="user_id" class="form-select" required>
+                                {% for u in users %}
+                                    <option value="{{ u.user_id }}">{{ u.full_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold">На яке поле?</label>
+                            <select name="field_id" class="form-select" required>
+                                {% for f in fields %}
+                                    <option value="{{ f.field_id }}">{{ f.field_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold">Очікуваний час повернення</label>
+                            <input type="datetime-local" name="end_time" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success">Підтвердити видачу</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="addMachineModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Купити техніку</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/add_machine" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3"><label>Модель</label><input type="text" name="model" class="form-control" required></div>
+                        <div class="mb-3">
+                            <label>Тип</label>
+                            <select name="type" class="form-select">
+                                <option>Трактор</option><option>Комбайн</option><option>Сівалка</option><option>Вантажівка</option>
+                            </select>
+                        </div>
+                        <div class="mb-3"><label>Рік випуску</label><input type="number" name="year" class="form-control" value="2020"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">Додати</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editMachineModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">Редагування</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/edit_machine" method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="machine_id" id="edit_id">
+                        <div class="mb-3"><label>Модель</label><input type="text" name="model" id="edit_model" class="form-control" required></div>
+                        <div class="mb-3"><label>Тип</label>
+                            <select name="type" id="edit_type" class="form-select">
+                                <option>Трактор</option><option>Комбайн</option><option>Сівалка</option><option>Вантажівка</option>
+                            </select>
+                        </div>
+                        <div class="mb-3"><label>Рік</label><input type="number" name="year" id="edit_year" class="form-control" required></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-secondary">Зберегти</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const assignModal = document.getElementById('assignModal');
+        assignModal.addEventListener('show.bs.modal', event => {
+            const button = event.relatedTarget;
+            document.getElementById('assign_id').value = button.getAttribute('data-id');
+            document.getElementById('assign_model').textContent = button.getAttribute('data-model');
+        });
+
+        const editModal = document.getElementById('editMachineModal');
+        editModal.addEventListener('show.bs.modal', event => {
+            const button = event.relatedTarget;
+            document.getElementById('edit_id').value = button.getAttribute('data-id');
+            document.getElementById('edit_model').value = button.getAttribute('data-model');
+            document.getElementById('edit_type').value = button.getAttribute('data-type');
+            document.getElementById('edit_year').value = button.getAttribute('data-year');
+        });
+    </script>
+</body>
+</html>
